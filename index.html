@@ -39,6 +39,7 @@
 
 
 
+
 <base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -1368,6 +1369,7 @@ function carteBoss(b, s) {
 }
 /** Onglet Combat : les deux boss, le journal des coups de la Compagnie, les règles */
 /* ---------- Carnet de quêtes : page à part (carnet.html), chargée au premier passage puis gardée en mémoire ---------- */
+const VERSION_CARNET = '2026-10-28-2'; // change à chaque livraison : force le téléphone à recharger carnet.html
 function afficherCarnet(oui) {
   const box = document.getElementById('carnetBox');
   if (!box) return;
@@ -1375,7 +1377,7 @@ function afficherCarnet(oui) {
   const nav = document.querySelector('nav.tabs');
   box.style.bottom = (nav ? nav.offsetHeight : 72) + 'px';
   if (!box.querySelector('iframe')) {
-    box.innerHTML = '<div class="ld">Ouverture du carnet…</div><iframe title="Carnet de quêtes" src="carnet.html" allow="autoplay; microphone; screen-wake-lock"></iframe>';
+    box.innerHTML = '<div class="ld">Ouverture du carnet…</div><iframe title="Carnet de quêtes" src="carnet.html?v=${VERSION_CARNET}" allow="autoplay; microphone; screen-wake-lock"></iframe>';
     box.querySelector('iframe').onload = () => { const l = box.querySelector('.ld'); if (l) l.remove(); };
   }
   box.hidden = false;

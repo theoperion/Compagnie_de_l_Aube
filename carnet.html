@@ -1626,6 +1626,7 @@ function renderSet(){
   const D=state.run.days, opt=v=>DAYS.map((d,i)=>`<option value="${i}" ${i===v?"selected":""}>${d}${i===STR_DAY?" (renfo)":""}</option>`).join("");
   $("#p-set").innerHTML=`
   <div class="row" style="justify-content:space-between"><button class="btn sm" id="setBack">← Retour</button><h2>Réglages</h2></div>
+  <p class="small muted" style="text-align:right;margin:0">Version du Carnet : 28/10 (renfo A/B, montre, lexique avancé)</p>
   <div class="card" id="acct">${acctHTML()}</div>
   <div class="card" id="montre">${montreHTML()}</div>
   <div class="card"><h2>Course</h2>
