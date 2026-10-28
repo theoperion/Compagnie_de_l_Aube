@@ -40,6 +40,10 @@
 
 
 
+
+
+
+
 <base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -295,6 +299,28 @@
   .bw-xp { color: var(--gold); font-weight: 700; } .bw-tr { font-size: 13px; color: var(--muted); }
   .boss-win .btn { margin-top: 16px; }
   @media (prefers-reduced-motion: reduce) { .bw-svg svg, .bc-av.hit svg { animation: none; } }
+  .saga { margin: 6px 0 4px; padding: 14px; border-radius: 16px; border: 1px solid #6a5320;
+    background: radial-gradient(circle at 20% 0, rgba(212,173,60,.16), transparent 60%), linear-gradient(180deg, #241a10, var(--panel)); }
+  .saga-t { font: 800 16px Georgia, serif; color: var(--gold); }
+  .saga-x { font-family: Georgia, serif; font-size: 14.5px; line-height: 1.55; color: #eadfc6; margin: 8px 0 10px; }
+  .saga-q { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .saga-c { display: block; width: 100%; text-align: left; margin-top: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); cursor: pointer; font: inherit; }
+  .saga-c b { display: block; font-size: 13.5px; } .saga-c span { font-size: 12px; color: var(--gold); }
+  .saga-c.vote { border-color: #6a5320; } .saga-c.elu { border-color: var(--gold); box-shadow: 0 0 12px rgba(212,173,60,.25); }
+  .saga-c:disabled { cursor: default; opacity: .85; } .saga-c:disabled:not(.elu) { opacity: .5; }
+  .evt { margin: 10px 0 4px; padding: 10px 12px; border-radius: 14px; border: 1px dashed #6a5320; background: linear-gradient(180deg, #2b2410, var(--panel)); }
+  .evt.on { border-style: solid; box-shadow: 0 0 18px rgba(212,173,60,.18); }
+  .evt-t { font: 700 14.5px Georgia, serif; color: var(--gold); } .evt-e { font-size: 12.5px; color: var(--text); margin-top: 2px; }
+  .evt-x { font-size: 12.5px; color: #d8c9a8; font-style: italic; margin-top: 6px; line-height: 1.4; }
+  .cal-g { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 3px; }
+  .cal-g i, .cal-l i { display: block; aspect-ratio: 1; border-radius: 3px; background: #2a2433; }
+  .cal-g .cal-j { font-size: 9px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .cal-g i.f1, .cal-l i.f1 { background: #2f5a3d; } .cal-g i.f2, .cal-l i.f2 { background: #3d8a55; } .cal-g i.f3, .cal-l i.f3 { background: #4fbf7a; }
+  .cal-g i.f4, .cal-l i.f4 { background: #d4ad3c; } .cal-g i.ra, .cal-l i.ra { background: #8f2b24; } .cal-g i.va, .cal-l i.va { background: #22344f; }
+  .cal-g i.fu, .cal-g i.av { background: transparent; border: 1px solid #2a2433; } .cal-g i.auj { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .cal-l { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .cal-l i { width: 11px; height: 11px; aspect-ratio: auto; display: inline-block; }
   .camp-l { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .camp-l:last-child { border-bottom: 0; } .camp-l b { width: 92px; flex: none; } .camp-l .camp-q { flex: 1; min-width: 0; letter-spacing: 1px; }
   .camp-l span { flex: 1; } .camp-l .btn { padding: 7px 10px; font-size: 12.5px; flex: none; }
@@ -980,7 +1006,7 @@ let herosActif = '';
 try { herosActif = localStorage.getItem('heros') || ''; } catch (e) {}
 const ARITE = { getState: 0, logAction: 3, undoToday: 1, toggleVacances: 0, planifierVacances: 2, supprimerVacances: 1, basculerPause: 1,
   decalerSeance: 3, annulerDecalage: 3, reglerRappel: 1, testerRappel: 0, changerDifficulte: 1, reglerConfort: 1, reglerDevise: 1,
-  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 0, motDuCoach: 0, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
+  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 0, motDuCoach: 0, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
 function api(fn, ...args) {
   if (fn in ARITE) {
     args = args.slice(0, ARITE[fn]);
@@ -1439,6 +1465,7 @@ function vueCamp(s) {
   const R = C.recap, chron = R.chronique || textesClaude['chronique|' + R.lundi] || '';
   const fait = R.heros.some(h => h.faits > 0);
   return `
+    ${vueSaga(s)}
     <div class="section"><h2>Aujourd'hui au camp</h2><span>${C.ensemble > 1 ? `🔥 ${C.ensemble} jours ensemble` : 'agissez tous les deux'}</span></div>
     <div class="panel camp">${aujourdhui}</div>
     <div class="section"><h2>Pacte de la semaine</h2><span>${P && P.accepte ? 'scellé' : 'à deux'}</span></div>
@@ -1447,12 +1474,12 @@ function vueCamp(s) {
     <div class="panel fil">${C.fil.map(f => `<div class="fil-l"><span>${esc(f.texte)}</span><small>${jour(f.date)}</small></div>`).join('')}</div>` : ''}
     ${fait ? `<details class="recap"><summary><div class="section"><h2>Récap de la semaine</h2><span>du ${dateCourte(R.lundi)} · toucher</span></div></summary>
     <div class="panel">${R.heros.map(h => `<div class="camp-l"><b>${esc(h.nom.split(' ')[0])}</b><span>${h.faits} quêtes · ${h.xp.toLocaleString('fr-FR')} XP</span></div>`).join('')}
-      ${chron ? `<p class="chronique">${esc(chron)}</p>` : '<p class="muted" style="font-size:13px">La chronique de la semaine s\'écrit…</p>'}</div></details>` : ''}`;
+      ${s.mj && s.mj.pret ? '<p class="muted" style="font-size:13px">📜 Votre semaine est racontée dans le chapitre de la Saga, en haut du camp.</p>' : chron ? `<p class="chronique">${esc(chron)}</p>` : '<p class="muted" style="font-size:13px">La chronique de la semaine s\'écrit…</p>'}</div></details>` : ''}`;
 }
 function demandesClaude(s) {
   if (!(enLigne || distant)) return;
   const C = s.camp;
-  if (onglet === 'compagnie' && C && !chroniqueDemandee && !C.recap.chronique && C.recap.heros.some(h => h.faits > 0)) {
+  if (onglet === 'compagnie' && C && !chroniqueDemandee && !(s.mj && s.mj.pret) && !C.recap.chronique && C.recap.heros.some(h => h.faits > 0)) {
     chroniqueDemandee = true;
     api('chroniqueSemaine').then(t => { if (t) { textesClaude['chronique|' + C.recap.lundi] = t; if (onglet === 'compagnie') render(); } }).catch(() => {});
   }
@@ -1486,6 +1513,92 @@ function ouvrirEncouragement() {
     <button data-msg="_">Envoyer mon mot</button>
     <button class="cancel" data-pal-close="1">Fermer</button>`;
   el.classList.add('on'); document.getElementById('sheetBg').classList.add('on');
+}
+
+/* ---------- Le Maître du Jeu : la Saga de l'Aube ---------- */
+let mjDemande = '';
+const BENED = { tout: { type: 'tout', mult: 1.1 }, joker: { type: 'joker' }, avantage: { type: 'avantage' } };
+['Force', 'Endurance', 'Agilité', 'Intelligence', 'Sagesse', 'Volonté', 'Charisme'].forEach(c => { BENED['carac_' + c] = { type: 'carac', carac: c, mult: 1.2 }; });
+function beneditionActive(s) { const m = s.mj; if (!m || !m.pret || m.decision == null) return null; const c = m.choix[m.decision]; return c ? Object.assign({ texte: c.effetTexte }, BENED[c.effet] || {}) : null; }
+function demanderMJ(s) {
+  if (!(enLigne || distant) || !s.mj || s.mj.pret || mjDemande === s.mj.lundi) return;
+  mjDemande = s.mj.lundi;
+  api('maitreDuJeu').then(m => {
+    if (!m || !m.pret || !state) return;
+    state.mj = m; render(); toast('📜 Un nouveau chapitre de la Saga vous attend');
+    // la Quête du destin apparaît dans les annexes : on recharge l'état complet en arrière-plan
+    if (envoisEnCours === 0) api('getState').then(st => { if (envoisEnCours === 0) { state = st; render(); } }).catch(() => {});
+  }).catch(() => {});
+}
+function vueSaga(s) {
+  const m = s.mj; if (!m) return '';
+  if (!m.pret) return `<div class="saga"><div class="saga-t">📜 La Saga de l'Aube</div><p class="muted" style="font-size:13px;margin:6px 0 0">Le Maître du Jeu écrit le chapitre de la semaine…</p></div>`;
+  const ch = m.choix.map((c, i) => {
+    const elu = m.decision === i, vote = m.monVote === i;
+    return `<button class="saga-c ${elu ? 'elu' : ''} ${vote ? 'vote' : ''}" ${m.decision != null && m.monVote != null ? 'disabled' : ''} data-vote="${i}">
+      <b>${esc(c.texte)}</b><span>${esc(c.effetTexte)}${elu ? ' · ✓ ' + (m.parMJ ? 'tranché par le Maître du Jeu' : 'choisi par la Compagnie') : vote ? ' · ton vote' : ''}</span></button>`;
+  }).join('');
+  const autres = Object.keys(m.votes || {}).filter(n => n !== s.heros);
+  return `<div class="saga"><div class="saga-t">📜 Chapitre ${m.numero} · ${esc(m.titre)}</div>
+    <p class="saga-x">${esc(m.texte)}</p>
+    <div class="saga-q">${m.decision != null ? 'La bénédiction de la semaine' : 'Votre choix pour la semaine'}${autres.length && m.decision == null ? ' · ' + esc(autres[0].split(' ')[0]) + ' a voté' : ''}</div>${ch}
+    ${m.decision == null ? '<p class="muted" style="font-size:11.5px;margin:6px 0 0">Votez tous les deux le même choix, sinon le Maître du Jeu tranche mercredi.</p>' : ''}</div>`;
+}
+document.addEventListener('click', e => {
+  const v = e.target.closest('[data-vote]');
+  if (!v || v.disabled) return;
+  const i = Number(v.dataset.vote);
+  regler('voterMJ', i).then(ok => ok && toast('Ton vote est scellé'));
+});
+function carteSagaMini(s) {
+  const m = s.mj; if (!m || !m.pret || m.monVote != null) return '';
+  return `<button class="evt on" data-tab="compagnie" style="width:100%;text-align:left;cursor:pointer"><div class="evt-t">📜 Nouveau chapitre : ${esc(m.titre)}</div><div class="evt-e">Le Maître du Jeu attend votre choix pour la semaine ›</div></button>`;
+}
+
+/* ---------- Événements saisonniers (récit écrit par Claude) ---------- */
+let recitDemande = '';
+function carteEvenement(s) {
+  const B = beneditionActive(s);
+  const bloc = B ? `<div class="evt on"><div class="evt-t">🎁 Bénédiction de la semaine</div><div class="evt-e">${esc(B.texte)} · jusqu'à dimanche</div></div>` : '';
+  const E = s.evenement; if (!E) return bloc;
+  const e = E.actuel || E.prochain; if (!e) return bloc;
+  const r = textesClaude['evt|' + e.cle] || {};
+  const nom = r.nom || e.nom, texte = r.texte || e.texte;
+  if ((enLigne || distant) && !e.texte && recitDemande !== e.cle) {
+    recitDemande = e.cle;
+    api('recitEvenement').then(x => { if (x && x.texte) { textesClaude['evt|' + e.cle] = x; render(); } }).catch(() => {});
+  }
+  return bloc + `<div class="evt ${E.actuel ? 'on' : ''}"><div class="evt-t">✨ ${E.actuel ? '' : 'Bientôt · '}${esc(nom)}</div>
+    <div class="evt-e">${esc(e.effetTexte)} · ${E.actuel ? "jusqu'au " + dateCourte(e.fin) : 'dès le ' + dateCourte(e.debut)}</div>
+    ${texte ? `<div class="evt-x">${esc(texte)}</div>` : ''}</div>`;
+}
+function multEvt(s, q, estAnnexe) {
+  const B = beneditionActive(s);
+  let mb = 1;
+  if (B && B.type === 'tout') mb = B.mult;
+  else if (B && B.type === 'carac' && (q.carac === B.carac || q.carac2 === B.carac)) mb = B.mult;
+  return mb * multEvt0(s, q, estAnnexe);
+}
+function multEvt0(s, q, estAnnexe) {
+  const e = s.evenement && s.evenement.actuel; if (!e) return 1;
+  const f = e.effet;
+  if (f.type === 'tout') return f.mult;
+  if (f.type === 'annexes' && estAnnexe) return f.mult;
+  if (f.type === 'carac' && (q.carac === f.carac || q.carac2 === f.carac)) return f.mult;
+  return 1;
+}
+
+/* ---------- Calendrier des séries : 12 semaines, une case par jour ---------- */
+function calendrierHTML(s) {
+  const C = s.calendrier; if (!C || !C.jours) return '';
+  const sem = [];
+  for (let i = 0; i < C.jours.length; i += 7) sem.push(C.jours.slice(i, i + 7));
+  const cl = j => j.futur ? 'fu' : j.avant ? 'av' : j.v ? 'va' : j.r ? 'ra' : j.f >= 4 ? 'f4' : j.f === 3 ? 'f3' : j.f === 2 ? 'f2' : j.f === 1 ? 'f1' : 'zz';
+  const tip = j => `${dateCourte(j.d)} : ${j.v ? 'vacances' : j.f + ' quête' + (j.f > 1 ? 's' : '') + (j.r ? ', ' + j.r + ' raté' + (j.r > 1 ? 's' : '') : '')}`;
+  return `<div class="section"><h2>Calendrier</h2><span>${C.sansRate > 0 ? `🔥 ${C.sansRate} jour${C.sansRate > 1 ? 's' : ''} sans raté` : '12 dernières semaines'}</span></div>
+    <div class="panel cal"><div class="cal-g">${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(x => `<span class="cal-j">${x}</span>`).join('')}
+      ${sem.map(w => w.map(j => `<i class="${cl(j)} ${j.d === s.today ? 'auj' : ''}" title="${tip(j)}"></i>`).join('')).join('')}</div>
+    <div class="cal-l"><i class="f1"></i>1 <i class="f2"></i>2 <i class="f3"></i>3 <i class="f4"></i>4+ quêtes · <i class="ra"></i>raté · <i class="va"></i>vacances</div></div>`;
 }
 
 function vueCombat(s) {
@@ -1566,7 +1679,7 @@ function ouvrirD20() {
 function resultatD20Html(d) {
   const cl = d.de === 20 ? 'crit' : d.de === 1 ? 'fumble' : '';
   const detail = `${COURT_MOD(Math.max(0, d.mod))} ${esc((COURT[d.carac] || d.carac || '').toString())}`;
-  return `<div class="calc">${d.de} ${detail} = <b>${d.total}</b></div>
+  return `${d.avantage ? `<div class="calc" style="font-size:13px">Avantage : ${d.avantage[0]} et ${d.avantage[1]}, tu gardes ${d.de}</div>` : ''}<div class="calc">${d.de} ${detail} = <b>${d.total}</b></div>
     <div class="titre ${cl}">${esc(d.titre)}</div><div class="texte">${esc(d.texte)}</div>
     ${d.mult !== 1 ? `<span class="mult ${d.mult < 1 ? 'malus' : ''}">XP ×${String(d.mult).replace('.', ',')} aujourd'hui</span>` : ''}`;
 }
@@ -1786,6 +1899,8 @@ function render() {
     ${aPro ? `<div class="filters">${['Tout', 'Perso', 'Pro'].map(f => `<button data-f="${f}" class="${f === filtre ? 'on' : ''}">${f}</button>`).join('')}</div>` : ''}`;
 
   const vueQuetes = `
+    ${carteSagaMini(s)}
+    ${carteEvenement(s)}
     ${carteD20(s)}
     ${carteBossMini(s)}
     ${dimanche ? `<button class="rappel" data-tab="heros">📜 Ton bilan du dimanche est prêt <span>→</span></button>` : ''}
@@ -1838,6 +1953,7 @@ function render() {
     <div class="list">${epiques.map(carteEpique).join('')}</div>` : ''}
     <div class="section"><h2>Séries</h2><span>jours sans raté</span></div>
     <div class="panel">${series}</div>
+    ${calendrierHTML(s)}
     ${blocTitres(s)}
     <div class="section"><h2>Caractéristiques</h2><span>score · bonus au d20</span></div>
     <div class="panel">${statsHtml}
@@ -1870,6 +1986,7 @@ function render() {
   afficherCarnet(onglet === 'carnet');
   if (onglet === 'compagnie' && !compVue) prechargerFiches(s);
   demandesClaude(s);
+  demanderMJ(s);
   memoriserEtat();
   document.getElementById('btnRepos').textContent = s.jokersRestants > 0
     ? `💤 Repos (utilise le joker, ${s.jokersRestants} restant)` : '💤 Repos (plus de joker cette semaine)';
@@ -2128,6 +2245,27 @@ const EFFETS_REGLAGE = {
   changerDifficulte: (n, v) => { n.reglages.difficulte.niveau = v; },
   choisirTitre: (n, id) => { if (n.titres) n.titres.choisi = id || ''; },
   encourager: n => { if (n.camp) n.camp.encourage = true; },
+  voterMJ: (n, i) => { const m = n.mj; if (!m) return; m.monVote = i; m.votes = Object.assign({}, m.votes, { [n.heros]: i });
+    const autres = Object.keys(m.votes).filter(k => k !== n.heros); if (autres.length && m.votes[autres[0]] === i) { m.decision = i; m.parMJ = false; } },
+  toggleVacances: n => {
+    const R = n.reglages;
+    if (n.vacances) { n.vacances = null; (R.vacances || []).forEach(v => { if (v.enCours) { v.enCours = false; v.fin = isoPlus(n.today, -1); } }); R.vacances = (R.vacances || []).filter(v => v.fin === '' || v.fin >= n.today); }
+    else { n.vacances = { depuis: n.today }; (R.vacances = R.vacances || []).push({ index: -1, debut: n.today, fin: '', enCours: true }); }
+  },
+  planifierVacances: (n, deb, fin) => {
+    const enCours = deb <= n.today && (!fin || fin >= n.today);
+    (n.reglages.vacances = n.reglages.vacances || []).push({ index: -1, debut: deb, fin: fin || '', enCours });
+    if (enCours) n.vacances = { depuis: deb };
+  },
+  supprimerVacances: (n, i) => {
+    const R = n.reglages, v = (R.vacances || []).find(x => x.index === i);
+    R.vacances = (R.vacances || []).filter(x => x.index !== i);
+    if (v && v.enCours) n.vacances = null;
+  },
+  decalerSeance: (n, nom, de, a) => { (n.reglages.decalages = n.reglages.decalages || []).push({ nom, de, a }); },
+  annulerDecalage: (n, nom, de, a) => { n.reglages.decalages = (n.reglages.decalages || []).filter(x => !(x.nom === nom && x.de === de && x.a === a)); },
+  reglerRappel: (n, cfg) => { n.reglages.rappel = Object.assign({}, n.reglages.rappel, cfg); },
+  sauvegarderMaintenant: n => { if (n.reglages.sauvegarde) n.reglages.sauvegarde.derniere = n.today; },
   proposerPacte: (n, id) => { if (n.camp) { const m = n.camp.modeles.find(x => x.id === id); if (m) n.camp.pacte = { id, texte: m.texte, par: n.heros, accepte: false }; } },
   accepterPacte: n => { if (n.camp && n.camp.pacte) Object.assign(n.camp.pacte, { accepte: true, ok: true, detail: 'pacte scellé' }); }
 };
@@ -2237,7 +2375,7 @@ function predire(s, nom, statut) {
     const epuise = n.arc || n.pv < n.seuilEpuise;
     const sort = capa.sortPrepare === nom ? 1.5 : 1;
     const sournoise = capa.roublard && estAnnexe && (capa.liste || []).some(c => c.n === 5 && c.debloquee && /^Prête/.test(c.statut)) ? 2 : 1;
-    return Math.round((Number(q.xp) || 0) * R.rend[Math.min(rang, 2)] * (epuise ? n.malus : 1) * (R.xpMult || 1) * ((n.d20 && n.d20.mult) || 1) * sort * sournoise);
+    return Math.round((Number(q.xp) || 0) * R.rend[Math.min(rang, 2)] * (epuise ? n.malus : 1) * (R.xpMult || 1) * ((n.d20 && n.d20.mult) || 1) * sort * sournoise * multEvt(n, q, estAnnexe));
   };
   const soin = estAnnexe ? R.soinAnnexe : R.soinHab;
   if (statut === 'Fait') {
@@ -2381,7 +2519,7 @@ document.addEventListener('click', e => {
   const v = e.target.closest('[data-vac]');
   if (v) {
     const msg = state.vacances ? 'Fin des vacances : le suivi reprend dès aujourd\'hui.' : 'Mode vacances : plus aucun raté ni perte de PV, séries gelées. Activer dès aujourd\'hui ?';
-    if (confirm(msg)) api('toggleVacances').then(s => { state = s; render(); }).catch(err => toast('Échec : ' + (err.message || err)));
+    if (confirm(msg)) regler('toggleVacances');
     return;
   }
   const t = e.target.closest('[data-tab]');
@@ -2436,11 +2574,11 @@ function actionProfil(b) {
   }
   if (a === 'sauver') {
     b.disabled = true; b.textContent = '💾 Copie en cours…';
-    regler('sauvegarderMaintenant').then(ok => ok && toast('Sauvegarde faite dans ton Drive 💾'));
+    toast('Sauvegarde lancée dans ton Drive 💾'); regler('sauvegarderMaintenant');
   } else if (a === 'vac-add') {
     const deb = document.getElementById('vacDeb').value, fin = document.getElementById('vacFin').value;
     if (!deb || !fin) { toast('Choisis une date de départ et de retour'); return; }
-    regler('planifierVacances', deb, fin).then(ok => ok && toast('Vacances planifiées 🏖️'));
+    toast('Vacances planifiées 🏖️'); regler('planifierVacances', deb, fin);
   } else if (a === 'vac-now') {
     if (confirm('Mode vacances dès aujourd\'hui : plus aucun raté ni perte de PV, séries gelées. Activer ?')) regler('toggleVacances');
   } else if (a === 'vac-del') {
@@ -2451,11 +2589,11 @@ function actionProfil(b) {
     if (h && confirm(h.enPause ? `Reprendre « ${h.nom} » dès aujourd'hui ?` : `Mettre « ${h.nom} » en pause ? Plus de raté ni de rappel, série gelée.`)) regler('basculerPause', h.nom);
   } else if (a === 'dec-add') {
     const de = document.getElementById('decDe').value, aa = document.getElementById('decA').value;
-    if (de && aa) regler('decalerSeance', decQuete, de, aa).then(ok => ok && toast('Séance décalée ↔️'));
+    if (de && aa) { toast('Séance décalée ↔️'); regler('decalerSeance', decQuete, de, aa); }
   } else if (a === 'dec-del') {
     regler('annulerDecalage', b.dataset.q, b.dataset.de, b.dataset.a);
   } else if (a === 'rap-test') {
-    regler('testerRappel').then(ok => ok && toast('E-mail de test envoyé 📬'));
+    toast('E-mail de test en cours d\'envoi 📬'); regler('testerRappel');
   } else if (a === 'diff') {
     const v = b.dataset.v;
     if (confirm(`Passer en mode ${v} ? Tu ne pourras plus changer pendant 30 jours.`)) regler('changerDifficulte', v);
