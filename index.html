@@ -12,9 +12,11 @@
 <meta name="apple-mobile-web-app-title" content="Compagnie">
 <script>
   /* Adresse du moteur (Apps Script → Déployer → Gérer les déploiements → URL /exec) */
-  window.API_URL = 'https://script.google.com/macros/s/AKfycbxHad9Acp94lmXjEVBHTLbICdOH3q7bhRSfmMU-fqJbgzql5sJs64SgvDzf0Yrm5B_K/exec';
+  window.API_URL = 'https://script.google.com/macros/s/AKfycbzv4_71b3HWajdhPHHatoDBkX5xHJQ8dpCc6Jzs0K7y449SotfM9kemDp3duXqvLzPp/exec';
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
+
+
 
 
 
@@ -299,6 +301,16 @@
   .bw-xp { color: var(--gold); font-weight: 700; } .bw-tr { font-size: 13px; color: var(--muted); }
   .boss-win .btn { margin-top: 16px; }
   @media (prefers-reduced-motion: reduce) { .bw-svg svg, .bc-av.hit svg { animation: none; } }
+  .pliable .pl-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--l, 4); overflow: hidden; margin-bottom: 0; }
+  .pliable.ouvert .pl-t { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  .pl-b { background: none; border: 0; padding: 4px 0 0; color: var(--gold); font: 600 12.5px Inter, sans-serif; cursor: pointer; }
+  .panel.coach .pl-t { margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; }
+  .rebond { margin-top: 10px; padding: 9px 11px; border-radius: 12px; border-left: 3px solid var(--gold); background: rgba(212,173,60,.08); }
+  .rebond b { color: var(--gold); display: block; font-size: 13px; } .rebond .pl-t { font-size: 13px; color: #eadfc6; margin: 4px 0 2px; }
+  .rebond > span { font-size: 12px; color: var(--gold); }
+  .leg-c { padding: 8px 0; border-bottom: 1px solid var(--line); } .leg-c:last-child { border-bottom: 0; }
+  .leg-c b { display: block; font: 700 14px Georgia, serif; color: var(--gold); } .leg-c > span { font-size: 11.5px; color: var(--muted); }
+  .leg-c .pl-t { font-family: Georgia, serif; font-size: 13.5px; line-height: 1.5; color: #eadfc6; margin: 4px 0 0; }
   .saga { margin: 6px 0 4px; padding: 14px; border-radius: 16px; border: 1px solid #6a5320;
     background: radial-gradient(circle at 20% 0, rgba(212,173,60,.16), transparent 60%), linear-gradient(180deg, #241a10, var(--panel)); }
   .saga-t { font: 800 16px Georgia, serif; color: var(--gold); }
@@ -336,7 +348,10 @@
   .panel.coach { border-color: #6a5320; } .panel.coach p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; }
   .surnom { color: var(--gold); font-style: italic; font-family: Georgia, serif; font-size: 12.5px; display: inline-block; }
   .comp-txt .surnom { display: block; margin-top: 1px; }
-  details.titres { margin-top: 0; background: none; border: 0; padding: 0; border-radius: 0; }
+  details.titres, details.legende { margin-top: 0; background: none; border: 0; padding: 0; border-radius: 0; }
+  details.legende summary { list-style: none; cursor: pointer; padding: 0; display: block; font: inherit; }
+  details.legende summary::-webkit-details-marker { display: none; } details.legende summary::after, details.legende[open] summary::after { content: none; }
+  details.legende summary .section { margin-bottom: 10px; }
   details.titres summary { list-style: none; cursor: pointer; padding: 0; display: block; font: inherit; }
   details.titres summary::-webkit-details-marker { display: none; } details.titres summary::after, details.titres[open] summary::after { content: none; }
   details.titres summary .section { margin-bottom: 10px; }
@@ -1006,7 +1021,7 @@ let herosActif = '';
 try { herosActif = localStorage.getItem('heros') || ''; } catch (e) {}
 const ARITE = { getState: 0, logAction: 3, undoToday: 1, toggleVacances: 0, planifierVacances: 2, supprimerVacances: 1, basculerPause: 1,
   decalerSeance: 3, annulerDecalage: 3, reglerRappel: 1, testerRappel: 0, changerDifficulte: 1, reglerConfort: 1, reglerDevise: 1,
-  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 0, motDuCoach: 0, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
+  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 0, motDuCoach: 0, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, rebondissement: 0, chapitreEvolution: 1, retrospective: 0, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
 function api(fn, ...args) {
   if (fn in ARITE) {
     args = args.slice(0, ARITE[fn]);
@@ -1465,6 +1480,7 @@ function vueCamp(s) {
   const R = C.recap, chron = R.chronique || textesClaude['chronique|' + R.lundi] || '';
   const fait = R.heros.some(h => h.faits > 0);
   return `
+    ${vueRetro(s)}
     ${vueSaga(s)}
     <div class="section"><h2>Aujourd'hui au camp</h2><span>${C.ensemble > 1 ? `🔥 ${C.ensemble} jours ensemble` : 'agissez tous les deux'}</span></div>
     <div class="panel camp">${aujourdhui}</div>
@@ -1474,7 +1490,7 @@ function vueCamp(s) {
     <div class="panel fil">${C.fil.map(f => `<div class="fil-l"><span>${esc(f.texte)}</span><small>${jour(f.date)}</small></div>`).join('')}</div>` : ''}
     ${fait ? `<details class="recap"><summary><div class="section"><h2>Récap de la semaine</h2><span>du ${dateCourte(R.lundi)} · toucher</span></div></summary>
     <div class="panel">${R.heros.map(h => `<div class="camp-l"><b>${esc(h.nom.split(' ')[0])}</b><span>${h.faits} quêtes · ${h.xp.toLocaleString('fr-FR')} XP</span></div>`).join('')}
-      ${s.mj && s.mj.pret ? '<p class="muted" style="font-size:13px">📜 Votre semaine est racontée dans le chapitre de la Saga, en haut du camp.</p>' : chron ? `<p class="chronique">${esc(chron)}</p>` : '<p class="muted" style="font-size:13px">La chronique de la semaine s\'écrit…</p>'}</div></details>` : ''}`;
+      ${s.mj && s.mj.pret ? '<p class="muted" style="font-size:13px">📜 Votre semaine est racontée dans le chapitre de la Saga, en haut du camp.</p>' : chron ? plie(chron, 'chronique') : '<p class="muted" style="font-size:13px">La chronique de la semaine s\'écrit…</p>'}</div></details>` : ''}`;
 }
 function demandesClaude(s) {
   if (!(enLigne || distant)) return;
@@ -1515,13 +1531,88 @@ function ouvrirEncouragement() {
   el.classList.add('on'); document.getElementById('sheetBg').classList.add('on');
 }
 
+/* ---------- Légende personnelle : un chapitre écrit par Claude à chaque évolution ---------- */
+const legendesDemandees = {};
+function demanderLegende(p, afficher) {
+  if (!(enLigne || distant) || !p || p.n <= 1 || legendesDemandees[p.n]) return;
+  if (state && state.legende && state.legende[p.n]) { if (afficher) montrerLegende(state.legende[p.n]); return; }
+  legendesDemandees[p.n] = true;
+  api('chapitreEvolution', { n: p.n, titre: p.titre, desc: p.desc }).then(c => {
+    if (!c || !state) return;
+    state.legende = Object.assign({}, state.legende, { [p.n]: c });
+    montrerLegende(c); if (onglet === 'heros') render();
+  }).catch(() => {});
+}
+function montrerLegende(c) {
+  const el = document.getElementById('sheetPal');
+  el.innerHTML = `<h3>📖 ${esc(c.titre)}</h3><p style="font-family:Georgia,serif;line-height:1.55;font-size:14.5px;color:#eadfc6;margin:6px 0 10px">${esc(c.texte)}</p>
+    <p class="muted" style="font-size:12px;margin:0">Nouveau chapitre de ta légende · ${esc(c.palier || '')}. Tu le retrouves dans l'onglet Héros.</p>
+    <button class="cancel" data-pal-close="1">Fermer</button>`;
+  el.classList.add('on'); document.getElementById('sheetBg').classList.add('on');
+}
+let legendeOuverte = false;
+document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('details.legende')) legendeOuverte = e.target.open; }, true);
+function blocLegende(s) {
+  const L = s.legende || {}, ks = Object.keys(L).map(Number).sort((a, b) => b - a);
+  if (!ks.length) return '';
+  return `<details class="legende" ${legendeOuverte ? 'open' : ''}><summary><div class="section"><h2>📖 Ta légende</h2><span>${ks.length} chapitre${ks.length > 1 ? 's' : ''} · toucher</span></div></summary>
+    <div class="panel">${ks.map(k => `<div class="leg-c"><b>${esc(L[k].titre)}</b><span>niveau ${k} · ${esc(L[k].palier || '')}</span>${plie(L[k].texte, 'leg-t')}</div>`).join('')}</div></details>`;
+}
+
+/* ---------- Rétrospective de l'année ---------- */
+let retroDemandee = false;
+function vueRetro(s) {
+  const R = s.retro; if (!R) return '';
+  if (!R.texte) return `<div class="saga"><div class="saga-t">🎆 Rétrospective ${esc(R.annee)}</div><p class="muted" style="font-size:13px;margin:6px 0 0">Le Maître du Jeu rassemble les souvenirs de l'année…</p></div>`;
+  return `<div class="saga"><div class="saga-t">🎆 L'année ${esc(R.annee)} de la Compagnie</div>
+    ${plie(R.texte, 'saga-x', 6)}
+    ${(R.heros || []).map(h => `<div class="camp-l"><b>${esc(h.nom.split(' ')[0])}</b><span>${h.faits} quêtes · ${Number(h.xp).toLocaleString('fr-FR')} XP${R.honneurs && R.honneurs[h.nom] ? ` · <span class="surnom">« ${esc(R.honneurs[h.nom])} »</span>` : ''}</span></div>`).join('')}
+    ${R.boss && R.boss.length ? `<p class="muted" style="font-size:12.5px;margin:8px 0 0">⚔️ ${R.boss.length} boss abattus : ${esc(R.boss.slice(0, 6).join(', '))}${R.boss.length > 6 ? '…' : ''}</p>` : ''}</div>`;
+}
+
+/* ---------- Textes longs : 4 lignes, puis « Lire la suite » ---------- */
+const textesOuverts = {};
+function plie(texte, cls, lignes) {
+  const k = hash32(texte);
+  return `<div class="pliable ${textesOuverts[k] ? 'ouvert' : ''}" data-k="${k}" style="--l:${lignes || 4}"><p class="pl-t ${cls || ''}">${esc(texte)}</p><button class="pl-b" data-plie="${k}" hidden>${textesOuverts[k] ? 'Réduire' : 'Lire la suite ▾'}</button></div>`;
+}
+function hash32(t) { let h = 0; for (let i = 0; i < String(t).length; i++) h = (h * 31 + String(t).charCodeAt(i)) | 0; return 'p' + (h >>> 0); }
+function boutonsPlies() {
+  document.querySelectorAll('.pliable').forEach(d => {
+    const t = d.querySelector('.pl-t'), b = d.querySelector('.pl-b');
+    if (!t || !b) return;
+    b.hidden = !(d.classList.contains('ouvert') || t.scrollHeight > t.clientHeight + 2);
+  });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-plie]');
+  if (!b) return;
+  e.stopPropagation();
+  const d = b.closest('.pliable'), k = b.dataset.plie;
+  textesOuverts[k] = !textesOuverts[k];
+  d.classList.toggle('ouvert', textesOuverts[k]);
+  b.textContent = textesOuverts[k] ? 'Réduire' : 'Lire la suite ▾';
+}, true);
+
 /* ---------- Le Maître du Jeu : la Saga de l'Aube ---------- */
 let mjDemande = '';
 const BENED = { tout: { type: 'tout', mult: 1.1 }, joker: { type: 'joker' }, avantage: { type: 'avantage' } };
 ['Force', 'Endurance', 'Agilité', 'Intelligence', 'Sagesse', 'Volonté', 'Charisme'].forEach(c => { BENED['carac_' + c] = { type: 'carac', carac: c, mult: 1.2 }; });
 function beneditionActive(s) { const m = s.mj; if (!m || !m.pret || m.decision == null) return null; const c = m.choix[m.decision]; return c ? Object.assign({ texte: c.effetTexte }, BENED[c.effet] || {}) : null; }
+let rebondDemande = '';
 function demanderMJ(s) {
-  if (!(enLigne || distant) || !s.mj || s.mj.pret || mjDemande === s.mj.lundi) return;
+  if (!(enLigne || distant) || !s.mj) return;
+  const b = s.boss && s.boss.semaine;
+  if (s.mj.pret && s.mj.rebondPossible && b && b.statut === 'En cours' && b.pvMax && b.pv / b.pvMax > 0.5 && rebondDemande !== s.mj.lundi) {
+    rebondDemande = s.mj.lundi;
+    api('rebondissement').then(m => { if (m && m.rebond && state) { state.mj = m; render(); toast('⚡ Rebondissement dans le combat !'); } }).catch(() => {});
+  }
+  if (s.retro && !s.retro.texte && !retroDemandee) {
+    retroDemandee = true;
+    api('retrospective').then(r => { if (r && r.texte && state) { state.retro = r; render(); toast('🎆 La rétrospective de l\'année est arrivée'); } }).catch(() => {});
+  }
+  if (state && state.niveau) { const CL = classeDe(state), p = CL.paliers[palierDe(state.niveau, CL)]; if (p && p.n > 1 && !(state.legende || {})[p.n]) demanderLegende(p, false); }
+  if (s.mj.pret || mjDemande === s.mj.lundi) return;
   mjDemande = s.mj.lundi;
   api('maitreDuJeu').then(m => {
     if (!m || !m.pret || !state) return;
@@ -1540,9 +1631,10 @@ function vueSaga(s) {
   }).join('');
   const autres = Object.keys(m.votes || {}).filter(n => n !== s.heros);
   return `<div class="saga"><div class="saga-t">📜 Chapitre ${m.numero} · ${esc(m.titre)}</div>
-    <p class="saga-x">${esc(m.texte)}</p>
+    ${plie(m.texte, 'saga-x')}
     <div class="saga-q">${m.decision != null ? 'La bénédiction de la semaine' : 'Votre choix pour la semaine'}${autres.length && m.decision == null ? ' · ' + esc(autres[0].split(' ')[0]) + ' a voté' : ''}</div>${ch}
-    ${m.decision == null ? '<p class="muted" style="font-size:11.5px;margin:6px 0 0">Votez tous les deux le même choix, sinon le Maître du Jeu tranche mercredi.</p>' : ''}</div>`;
+    ${m.decision == null ? '<p class="muted" style="font-size:11.5px;margin:6px 0 0">Votez tous les deux le même choix, sinon le Maître du Jeu tranche mercredi.</p>' : ''}
+    ${m.rebond ? `<div class="rebond"><b>⚡ Rebondissement</b>${plie(m.rebond.texte, '', 3)}<span>${esc(m.rebond.effetTexte)}</span></div>` : ''}</div>`;
 }
 document.addEventListener('click', e => {
   const v = e.target.closest('[data-vote]');
@@ -1559,7 +1651,9 @@ function carteSagaMini(s) {
 let recitDemande = '';
 function carteEvenement(s) {
   const B = beneditionActive(s);
-  const bloc = B ? `<div class="evt on"><div class="evt-t">🎁 Bénédiction de la semaine</div><div class="evt-e">${esc(B.texte)} · jusqu'à dimanche</div></div>` : '';
+  const RB = s.mj && s.mj.rebond;
+  const bloc = (B ? `<div class="evt on"><div class="evt-t">🎁 Bénédiction de la semaine</div><div class="evt-e">${esc(B.texte)} · jusqu'à dimanche</div></div>` : '') +
+    (RB ? `<div class="evt on"><div class="evt-t">⚡ Rebondissement</div><div class="evt-e">${esc(RB.effetTexte)}</div></div>` : '');
   const E = s.evenement; if (!E) return bloc;
   const e = E.actuel || E.prochain; if (!e) return bloc;
   const r = textesClaude['evt|' + e.cle] || {};
@@ -1570,13 +1664,15 @@ function carteEvenement(s) {
   }
   return bloc + `<div class="evt ${E.actuel ? 'on' : ''}"><div class="evt-t">✨ ${E.actuel ? '' : 'Bientôt · '}${esc(nom)}</div>
     <div class="evt-e">${esc(e.effetTexte)} · ${E.actuel ? "jusqu'au " + dateCourte(e.fin) : 'dès le ' + dateCourte(e.debut)}</div>
-    ${texte ? `<div class="evt-x">${esc(texte)}</div>` : ''}</div>`;
+    ${texte ? plie(texte, 'evt-x', 3) : ''}</div>`;
 }
 function multEvt(s, q, estAnnexe) {
   const B = beneditionActive(s);
   let mb = 1;
   if (B && B.type === 'tout') mb = B.mult;
   else if (B && B.type === 'carac' && (q.carac === B.carac || q.carac2 === B.carac)) mb = B.mult;
+  const RB = s.mj && s.mj.rebond && s.mj.rebond.effet;
+  if (RB && (RB.type === 'tout' || (RB.type === 'carac' && (q.carac === RB.carac || q.carac2 === RB.carac)))) mb *= RB.mult;
   return mb * multEvt0(s, q, estAnnexe);
 }
 function multEvt0(s, q, estAnnexe) {
@@ -1899,6 +1995,7 @@ function render() {
     ${aPro ? `<div class="filters">${['Tout', 'Perso', 'Pro'].map(f => `<button data-f="${f}" class="${f === filtre ? 'on' : ''}">${f}</button>`).join('')}</div>` : ''}`;
 
   const vueQuetes = `
+    ${s.retro && s.retro.texte ? `<button class="evt on" data-tab="compagnie" style="width:100%;text-align:left;cursor:pointer"><div class="evt-t">🎆 La rétrospective ${esc(s.retro.annee)} est arrivée</div><div class="evt-e">À lire dans le camp de la Compagnie ›</div></button>` : ''}
     ${carteSagaMini(s)}
     ${carteEvenement(s)}
     ${carteD20(s)}
@@ -1946,7 +2043,7 @@ function render() {
     </div>
     <div class="section"><h2>Capacités</h2><span>actives dès leur niveau</span></div>
     <div class="panel">${capas}</div>
-    ${s.bilan.precedente && textesClaude['coach|' + s.bilan.precedente.lundi] ? `<div class="panel coach"><b>🧙 Le mot du mentor</b><p>${esc(textesClaude['coach|' + s.bilan.precedente.lundi])}</p></div>` : ''}
+    ${s.bilan.precedente && textesClaude['coach|' + s.bilan.precedente.lundi] ? `<div class="panel coach"><b>🧙 Le mot du mentor</b>${plie(textesClaude['coach|' + s.bilan.precedente.lundi])}</div>` : ''}
     <div class="section"><h2>Bilan</h2><span>semaine du ${dateCourte(s.bilan.semaine.lundi)}</span></div>
     ${carteBilan(s, dimanche)}
     ${epiques.length ? `<div class="section"><h2>Quêtes épiques</h2><span>trait doré = temps écoulé</span></div>
@@ -1954,6 +2051,7 @@ function render() {
     <div class="section"><h2>Séries</h2><span>jours sans raté</span></div>
     <div class="panel">${series}</div>
     ${calendrierHTML(s)}
+    ${blocLegende(s)}
     ${blocTitres(s)}
     <div class="section"><h2>Caractéristiques</h2><span>score · bonus au d20</span></div>
     <div class="panel">${statsHtml}
@@ -1987,6 +2085,7 @@ function render() {
   if (onglet === 'compagnie' && !compVue) prechargerFiches(s);
   demandesClaude(s);
   demanderMJ(s);
+  requestAnimationFrame(boutonsPlies);
   memoriserEtat();
   document.getElementById('btnRepos').textContent = s.jokersRestants > 0
     ? `💤 Repos (utilise le joker, ${s.jokersRestants} restant)` : '💤 Repos (plus de joker cette semaine)';
@@ -2321,6 +2420,7 @@ function celebrer(liste) {
 }
 function evolution(niveau) {
   const CL = classeDe(), pal = palierDe(niveau, CL), p = CL.paliers[pal];
+  setTimeout(() => demanderLegende(p, true), 3400);
   if (!confort().animations) { toast(`Évolution : ${p.titre}`); return; }
   const el = document.createElement('div');
   el.className = 'evolution';
