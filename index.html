@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Compagnie">
 <script>
   /* Adresse du moteur (Apps Script → Déployer → Gérer les déploiements → URL /exec) */
-  window.API_URL = 'https://script.google.com/macros/s/AKfycbyV4p6uM6ehXNgSmiBngRqCt7GQ3qEt1TAexbCyxRkmnT3VuIFRDb9XIh7K072eDAW9hw/exec';
+  window.API_URL = 'https://script.google.com/macros/s/AKfycbzv4_71b3HWajdhPHHatoDBkX5xHJQ8dpCc6Jzs0K7y449SotfM9kemDp3duXqvLzPp/exec';
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 
@@ -541,6 +541,7 @@
   <button data-act="Raté">❌ Raté (−PV)</button>
   <button data-act="Repos" id="btnRepos">💤 Repos (utilise le joker de la semaine)</button>
   <button data-act="undo">↩️ Annuler la dernière saisie du jour</button>
+  <button data-act="jour" id="btnJour" style="display:none">📅 Changer de jour (cette semaine)</button>
   <button data-act="renommer">✏️ Renommer la quête</button>
   <button class="cancel" data-act="close">Fermer</button>
 </div>
@@ -993,6 +994,7 @@ let menuQuete = null;
 let busy = new Set();
 let filtre = 'Tout';
 let onglet = 'quetes';
+let profilErreur = '';
 let profil = null, profilCharge = false, decQuete = '', ongletPrec = 'quetes';
 const confort = () => (state && state.reglages && state.reglages.confort) || { animations: true, vibrations: true };
 function vib(p) { if (confort().vibrations && navigator.vibrate) navigator.vibrate(p); }
@@ -1007,11 +1009,13 @@ const API_URL = (typeof window !== 'undefined' && window.API_URL) || '';
 const distant = !enLigne && !!API_URL;
 let cleHeros = '';
 try { cleHeros = localStorage.getItem('cle') || ''; } catch (e) {}
+let cleRefusee = false;
 async function appelDistant(fn, args) {
+  if (!cleHeros && fn !== 'verifierCle') { if (!cleRefusee) { cleRefusee = true; setTimeout(() => ecranCle(), 0); } throw new Error('Clé de héros manquante'); }
   const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args, cle: cleHeros }) });
   const j = await r.json();
   if (!j.ok) {
-    if (j.erreur === 'CLE' && fn !== 'verifierCle') { try { localStorage.removeItem('cle'); } catch (e) {} cleHeros = ''; setTimeout(() => ecranCle('Ta clé n\'est plus valable : entre-la à nouveau.'), 0); }
+    if (j.erreur === 'CLE' && fn !== 'verifierCle' && !cleRefusee) { cleRefusee = true; setTimeout(() => ecranCle('Le Sheet ne reconnaît pas cette clé. Vérifie-la (ou corrige-la) puis valide.'), 0); }
     throw new Error(j.message || 'Erreur du serveur');
   }
   return j.data;
@@ -1949,18 +1953,7 @@ function render() {
   const faits = duJour.filter(h => h.jour.fait).length;
   const dimanche = indexJour(s.today) === 6;
 
-  const statsHtml = s.stats.map(st => {
-    const mod = Math.max(0, Math.floor((st.score - 10) / 2)); // comme le d20 : jamais négatif
-    const max = st.score >= 20;
-    const dansPalier = st.xp % s.xpParPoint;
-    const pct = max ? 100 : dansPalier / s.xpParPoint * 100;
-    return `<div class="stat2">
-      <div class="stat2-top"><span>${ICONES[st.nom] || ''} <b>${st.nom}</b></span>
-        <span><span class="sc">${st.score}</span> <span class="md">${mod >= 0 ? '+' : ''}${mod}</span></span></div>
-      <div class="bar"><i style="width:${pct}%"></i></div>
-      <div class="stat2-sub">${max ? 'Score maximum atteint' : `${Math.round(dansPalier).toLocaleString('fr-FR')} / ${Number(s.xpParPoint).toLocaleString('fr-FR')} XP avant ${st.score + 1}`} · ${Math.round(st.xp).toLocaleString('fr-FR')} XP au total</div>
-    </div>`;
-  }).join('');
+  const statsHtml = statsDe(s);
 
   const series = [...s.habitudes].sort((a, b) => (b.serieNb > 0 ? b.serie : 0) - (a.serieNb > 0 ? a.serie : 0)).map(h => `
     <div class="serie-row"><span>${ICONES[h.carac] || '⭐'} ${esc(h.nom)}</span>
@@ -2102,6 +2095,21 @@ function joursRestantsSemaine() {
   return out;
 }
 
+/* Caractéristiques d'un héros (soi ou compagnon) */
+function statsDe(s) {
+  return (s.stats || []).map(st => {
+    const mod = Math.max(0, Math.floor((st.score - 10) / 2)); // comme le d20 : jamais négatif
+    const max = st.score >= 20, xpp = s.xpParPoint || 1;
+    const dansPalier = st.xp % xpp;
+    const pct = max ? 100 : dansPalier / xpp * 100;
+    return `<div class="stat2">
+      <div class="stat2-top"><span>${ICONES[st.nom] || ''} <b>${st.nom}</b></span>
+        <span><span class="sc">${st.score}</span> <span class="md">+${mod}</span></span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="stat2-sub">${max ? 'Score maximum atteint' : `${Math.round(dansPalier).toLocaleString('fr-FR')} / ${Number(xpp).toLocaleString('fr-FR')} XP avant ${st.score + 1}`} · ${Math.round(st.xp).toLocaleString('fr-FR')} XP au total</div>
+    </div>`;
+  }).join('');
+}
 /* ---------- Onglet Compagnie : où en sont les autres héros ---------- */
 /* Fiches des compagnons : gardées sur le téléphone, rechargées en arrière-plan */
 const fichesComp = {};
@@ -2140,6 +2148,7 @@ function vueCompagnonDetail(c) {
     <div class="comp moi"><div class="comp-av">${cl.dessin(pal, 'cd', lookDe(c.look))}</div>
       <div class="comp-txt"><b>${esc(c.heros)}</b><span class="tt">${[c.titre, 'niveau ' + c.niveau, (c.classe || {}).nom].filter(Boolean).map(esc).join(' · ')}</span>
         <div class="bar pv"><i style="width:${pv}%"></i></div><span>${c.pv} PV · ${Math.round(Number(c.xpTotale)).toLocaleString('fr-FR')} XP${c.d20 ? ` · 🎲 ${c.d20.de} (${esc(c.d20.titre)})` : ''}</span></div></div>
+    ${(c.stats || []).length ? `<div class="section"><h2>Caractéristiques</h2><span>score · modificateur</span></div><div class="panel">${statsDe(c)}</div>` : ''}
     <div class="section"><h2>Aujourd'hui</h2><span>${auj.filter(h => h.jour.fait).length}/${auj.length}</span></div>
     <div class="panel">${auj.length ? auj.map(h => ligne(h, etat(h))).join('') : '<div class="muted">Rien d\'obligatoire aujourd\'hui.</div>'}</div>
     <div class="section"><h2>Cette semaine</h2><span>objectifs</span></div>
@@ -2147,6 +2156,7 @@ function vueCompagnonDetail(c) {
     ${ann.length ? `<div class="section"><h2>Quêtes annexes</h2><span>déjà accomplies</span></div>
     <div class="panel">${ann.map(a => ligne(a, `<span class="wk">${a.jour.fait ? '✓ aujourd\'hui' : a.fois + ' fois'}</span>`)).join('')}</div>` : ''}
     ${c.objectifs.length ? `<div class="section"><h2>Quêtes épiques</h2><span>progression</span></div><div class="list">${c.objectifs.map(carteEpique).join('')}</div>` : ''}
+    ${sem.some(h => h.serieNb > 0 && h.serie > 0) ? `<div class="section"><h2>Séries</h2><span>record</span></div><div class="panel">${[...sem].filter(h => h.serieNb > 0 && h.serie > 0).sort((a, b) => b.serie - a.serie).map(h => `<div class="serie-row"><span>${ICONES[h.carac] || '⭐'} ${esc(h.nom)}</span><span><span class="streak">🔥 ${h.serie} j</span><span class="muted"> · record&nbsp;${h.record || 0}&nbsp;j</span></span></div>`).join('')}</div>` : ''}
     <div class="aide-coop">Lecture seule : chacun valide ses propres quêtes avec sa clé.</div></div>`;
 }
 document.addEventListener('click', e => {
@@ -2200,7 +2210,8 @@ function vueProfil(s) {
   const CL = classeDe(s), pal = palierDe(s.niveau, CL);
   const p = profil;
   const rec = p && p.records;
-  const grille = !p ? '<div class="grid-wrap"><div class="muted" style="font-size:13px">Chargement de ta Life Grid…</div></div>'
+  const grille = !p ? (profilErreur ? `<div class="grid-wrap"><div class="muted" style="font-size:13px">Life Grid indisponible : ${esc(profilErreur)}</div><button class="btn mini or" data-pr="profil-retry" style="margin-top:8px">Réessayer</button></div>`
+      : '<div class="grid-wrap"><div class="muted" style="font-size:13px">Chargement de ta Life Grid…</div></div>')
     : !p.grille ? '<div class="grid-wrap"><div class="muted" style="font-size:13px">Renseigne ta date de naissance dans le Sheet (Paramètres) pour afficher ta vie en semaines.</div></div>'
     : `<div class="grid-wrap">
         <div class="grid-info"><span>Semaine <b>${p.semaineVie.toLocaleString('fr-FR')}</b> sur 4 160</span><span><b>${(p.semaineVie / 41.6).toFixed(1).replace('.', ',')} %</b> de la grille</span></div>
@@ -2254,6 +2265,9 @@ function vueProfil(s) {
         <label>Déplacée au<select id="decA">${aOpts.map(d => `<option value="${d}">${nomJour(d)}</option>`).join('') || '<option value="">aucun jour libre</option>'}</select></label></div>
       <button class="btn or plein" data-pr="dec-add" ${deOpts.length && aOpts.length ? '' : 'disabled'}>Décaler la séance</button>` : '<div class="muted" style="font-size:12px">Aucune routine active.</div>'}
     </div>`;
+  const regCle = distant ? `<div class="reg"><h3>🔑 Ma clé de héros</h3>
+      <div class="aide">Enregistrée sur ce téléphone : ${cleHeros ? esc(cleHeros.slice(0, 4)) + '••••-••••' : 'aucune'}. Si le Sheet dit « clé inconnue », retape-la ici.</div>
+      <button class="btn plein" data-pr="cle-mod">Modifier ma clé</button></div>` : '';
   const rp = R.rappel || { actif: true, heure: 20, dimanche: true };
   const regRap = `<div class="reg"><h3>🔔 Rappel du soir ${sw('rapOn', rp.actif)}</h3>
       <div class="aide">Un e-mail seulement s'il te reste des quêtes. Le dimanche, il peut aussi t'envoyer ton bilan de la semaine.</div>
@@ -2304,7 +2318,7 @@ function vueProfil(s) {
     <div class="section"><h2>Évolutions</h2><span>${pal + 1} / ${CL.paliers.length} formes</span></div>
     <div class="panel">${evos}</div>
     <div class="section"><h2>Réglages</h2><span>enregistrés dans le Sheet</span></div>
-    ${regVac}${regPause}${regDec}${regRap}${regDiff}${regSauv}${regConf}`;
+    ${regVac}${regPause}${regDec}${regRap}${regDiff}${regSauv}${regConf}${regCle}`;
 }
 
 function dessinerGrille() {
@@ -2324,8 +2338,9 @@ function dessinerGrille() {
 async function chargerProfil(force) {
   if (profilCharge && !force) return;
   profilCharge = true;
+  profilErreur = '';
   try { profil = await api('getProfil'); if (onglet === 'profil') render(); }
-  catch (e) { profilCharge = false; toast('Profil indisponible : ' + (e.message || e)); }
+  catch (e) { profilCharge = false; profilErreur = String((e && e.message) || e); if (onglet === 'profil') render(); }
 }
 
 /** Appel d'un réglage : met à jour l'état et réaffiche. */
@@ -2361,8 +2376,10 @@ const EFFETS_REGLAGE = {
     R.vacances = (R.vacances || []).filter(x => x.index !== i);
     if (v && v.enCours) n.vacances = null;
   },
-  decalerSeance: (n, nom, de, a) => { (n.reglages.decalages = n.reglages.decalages || []).push({ nom, de, a }); },
-  annulerDecalage: (n, nom, de, a) => { n.reglages.decalages = (n.reglages.decalages || []).filter(x => !(x.nom === nom && x.de === de && x.a === a)); },
+  decalerSeance: (n, nom, de, a) => { (n.reglages.decalages = n.reglages.decalages || []).push({ nom, de, a });
+    const h = n.habitudes.find(x => x.nom === nom); if (h) { (h.decalages = h.decalages || []).push({ nom, de, a }); if (de === n.today && !h.jour.fait) h.aFaire = false; if (a === n.today) h.aFaire = true; } },
+  annulerDecalage: (n, nom, de, a) => { const f = x => !(x.nom === nom && x.de === de && x.a === a); n.reglages.decalages = (n.reglages.decalages || []).filter(f);
+    const h = n.habitudes.find(x => x.nom === nom); if (h) { h.decalages = (h.decalages || []).filter(f); if (a === n.today && !h.jour.fait) h.aFaire = false; if (de === n.today) h.aFaire = true; } },
   reglerRappel: (n, cfg) => { n.reglages.rappel = Object.assign({}, n.reglages.rappel, cfg); },
   sauvegarderMaintenant: n => { if (n.reglages.sauvegarde) n.reglages.sauvegarde.derniere = n.today; },
   proposerPacte: (n, id) => { if (n.camp) { const m = n.camp.modeles.find(x => x.id === id); if (m) n.camp.pacte = { id, texte: m.texte, par: n.heros, accepte: false }; } },
@@ -2603,12 +2620,54 @@ async function renommer(nom) {
   if (await regler('renommerQuete', nom, nouveau.trim())) toast(`Renommée en « ${nouveau.trim()} » ✏️`);
 }
 
+const SEANCES_MOBILES = /^(course|renfo)/i;
+function joursPourDecaler(h) {
+  const jr = joursRestantsSemaine(), today = state.today;
+  const pris = (h.decalages || []).flatMap(x => [x.de, x.a]);
+  return {
+    de: jr.filter(d => prevu(h, d) && !pris.includes(d) && !(h.jour.fait && d === today)),
+    a: jr.filter(d => !prevu(h, d) && !pris.includes(d))
+  };
+}
 function ouvrirMenu(nom) {
   menuQuete = nom;
+  const h = state && state.habitudes.find(x => x.nom === nom);
+  document.getElementById('btnJour').style.display = h && h.type === 'Routine' && SEANCES_MOBILES.test(nom) ? '' : 'none';
   document.getElementById('sheetTitle').textContent = nom;
   document.getElementById('sheet').classList.add('on');
   document.getElementById('sheetBg').classList.add('on');
 }
+function ouvrirChangerJour(nom) {
+  const h = state.habitudes.find(x => x.nom === nom);
+  if (!h) return;
+  const j = joursPourDecaler(h);
+  const nomJour = d => (d === state.today ? 'aujourd\'hui' : JOURS_LONGS[indexJour(d)]) + ' ' + versDate(d).getDate();
+  const decs = (h.decalages || []).filter(x => x.a >= state.today || x.de >= state.today);
+  const el = document.getElementById('sheetPal');
+  el.innerHTML = `<h3>📅 ${esc(nom)}</h3>
+    <div class="muted" style="font-size:13px;margin:-4px 0 10px">Pour cette semaine seulement : pas de raté, le planning habituel ne change pas.</div>
+    ${decs.map(x => `<div class="ligne" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><span>${nomJour(x.de)} → ${nomJour(x.a)}</span>
+      <button class="btn mini" data-jour-annul="${x.de}|${x.a}">Annuler</button></div>`).join('')}
+    ${j.de.length && j.a.length ? `<div class="form"><label>Séance prévue le<select id="cjDe">${j.de.map(d => `<option value="${d}">${nomJour(d)}</option>`).join('')}</select></label>
+      <label>Déplacée au<select id="cjA">${j.a.map(d => `<option value="${d}">${nomJour(d)}</option>`).join('')}</select></label></div>
+      <button class="btn or plein" data-jour-ok="1" style="margin-top:10px">Déplacer la séance</button>`
+      : `<div class="muted" style="font-size:13px">${j.de.length ? 'Aucun jour libre d\'ici dimanche.' : 'Plus de séance à déplacer cette semaine.'}</div>`}
+    <button class="cancel" data-pal-close="1">Fermer</button>`;
+  el.dataset.q = nom;
+  el.classList.add('on'); document.getElementById('sheetBg').classList.add('on');
+}
+document.addEventListener('click', e => {
+  const ok = e.target.closest('[data-jour-ok]'), an = e.target.closest('[data-jour-annul]');
+  if (!ok && !an) return;
+  const nom = document.getElementById('sheetPal').dataset.q;
+  if (ok) {
+    const de = document.getElementById('cjDe').value, a = document.getElementById('cjA').value;
+    fermerMenu(); toast('Séance déplacée 📅'); regler('decalerSeance', nom, de, a);
+  } else {
+    const [de, a] = an.dataset.jourAnnul.split('|');
+    fermerMenu(); toast('Décalage annulé'); regler('annulerDecalage', nom, de, a);
+  }
+});
 function fermerMenu() {
   document.getElementById('sheet').classList.remove('on');
   document.getElementById('sheetPal').classList.remove('on');
@@ -2649,6 +2708,7 @@ document.addEventListener('click', e => {
   if (act) {
     const a = act.dataset.act; fermerMenu();
     if (a === 'renommer' && menuQuete) { renommer(menuQuete); return; }
+    if (a === 'jour' && menuQuete) { ouvrirChangerJour(menuQuete); return; }
     if (a !== 'close' && menuQuete) agir(menuQuete, a);
   }
 });
@@ -2662,6 +2722,8 @@ function actionProfil(b) {
     else choisirHerosEcran();
     return;
   }
+  if (a === 'profil-retry') { chargerProfil(true); render(); return; }
+  if (a === 'cle-mod') { cleRefusee = true; ecranCle('Entre ta clé (elle remplace celle de ce téléphone).'); return; }
   if (a === 'sort') {
     const q = document.getElementById('sortQ').value;
     regler('preparerSort', q).then(ok => ok && toast(`✨ Sort préparé sur « ${q} » : accomplis-la cette semaine pour ×1,5`));
@@ -2923,20 +2985,29 @@ document.addEventListener('click', e => {
 function ecranCle(msg) {
   document.getElementById('app').innerHTML = `<div class="choix"><h1>☀ La Compagnie de l'Aube</h1>
     <p>Entre ta clé de héros (une seule fois : ce téléphone s'en souviendra).</p>
-    <input id="cleIn" autocomplete="off" autocapitalize="characters" placeholder="ABC-1234-WXYZ"
+    <input id="cleIn" autocomplete="off" autocapitalize="characters" placeholder="ABC-1234-WXYZ" value="${esc(cleHeros || '')}"
       style="width:100%;max-width:280px;padding:12px;border-radius:12px;border:1px solid #6a5320;background:#1c1726;color:#efe3c8;font:600 18px monospace;text-align:center;letter-spacing:.08em">
     <br><button class="btn or" id="cleGo" style="margin-top:12px;padding:10px 22px">Rejoindre la Compagnie</button>
-    <p class="muted" id="cleMsg" style="margin-top:10px">${esc(msg || '')}</p></div>`;
+    <p class="muted" id="cleMsg" style="margin-top:10px">${esc(msg || '')}</p>
+    ${state ? '<button class="lien" id="cleRetour" style="margin-top:6px">‹ Revenir à l\'app sans changer</button>' : ''}</div>`;
+  const ret = document.getElementById('cleRetour');
+  if (ret) ret.onclick = () => { cleRefusee = false; render(); };
   const go = async () => {
-    const v = document.getElementById('cleIn').value.trim().toUpperCase();
+    const v = document.getElementById('cleIn').value.replace(/\s+/g, '').toUpperCase();
     if (!v) return;
+    const ancienne = cleHeros;
     cleHeros = v;
     document.getElementById('cleMsg').textContent = 'Vérification…';
     try {
       const h = await appelDistant('verifierCle', []);
       try { localStorage.setItem('cle', v); localStorage.setItem('heros', h.nom); } catch (e) {}
-      herosActif = h.nom; lancer();
-    } catch (e) { document.getElementById('cleMsg').textContent = 'Clé inconnue : vérifie-la et réessaie.'; }
+      cleRefusee = false; profilErreur = ''; herosActif = h.nom; state = null; profil = null; profilCharge = false; lancer();
+    } catch (e) {
+      cleHeros = ancienne;
+      const m = String((e && e.message) || e);
+      document.getElementById('cleMsg').textContent = /inconnue/i.test(m) ? 'Clé inconnue : vérifie-la (format THE-XXXX-XXXX) et réessaie.'
+        : 'Le Sheet ne répond pas (' + m + '). Vérifie le déploiement Apps Script, puis réessaie.';
+    }
   };
   document.getElementById('cleGo').onclick = go;
   document.getElementById('cleIn').onkeydown = e => { if (e.key === 'Enter') go(); };
