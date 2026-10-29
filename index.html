@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Compagnie">
 <script>
   /* Adresse du moteur (Apps Script → Déployer → Gérer les déploiements → URL /exec) */
-  window.API_URL = 'https://script.google.com/macros/s/AKfycby8c7XQaexxVoeYjQ7vGp1LWseEAT7wJBLujTKt2P4Rv1EuVb-L_NvfeP0454yh2X7V/exec';
+  window.API_URL = 'https://script.google.com/macros/s/AKfycbzv4_71b3HWajdhPHHatoDBkX5xHJQ8dpCc6Jzs0K7y449SotfM9kemDp3duXqvLzPp/exec';
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 
@@ -1010,22 +1010,68 @@ const distant = !enLigne && !!API_URL;
 let cleHeros = '';
 try { cleHeros = localStorage.getItem('cle') || ''; } catch (e) {}
 let cleRefusee = false;
+const VERSION_APP = '2026-10-29-3';
+/* Lectures sans effet : on peut les renvoyer sans risque si le réseau a coupé */
+const LECTURES = new Set(['getState', 'getProfil', 'voirCompagnon', 'chroniqueSemaine', 'paroleBoss', 'motDuCoach', 'recitEvenement', 'maitreDuJeu', 'rebondissement', 'retrospective', 'chapitreEvolution', 'verifierCle']);
+const pause = ms => new Promise(r => setTimeout(r, ms));
 async function appelDistant(fn, args) {
   if (!cleHeros && fn !== 'verifierCle') { if (!cleRefusee) { cleRefusee = true; setTimeout(() => ecranCle(), 0); } throw new Error('Clé de héros manquante'); }
-  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args, cle: cleHeros }) });
-  const j = await r.json();
+  let j = null;
+  for (let essai = 0; ; essai++) {
+    try {
+      const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args, cle: cleHeros }) });
+      const brut = await r.text();
+      try { j = JSON.parse(brut); }
+      catch (e) { // Google a renvoyé une page (connexion, quota, déploiement) au lieu de la réponse
+        const titre = (brut.match(/<title>([^<]*)/i) || [])[1] || brut.replace(/<[^>]+>/g, ' ').trim().slice(0, 80);
+        throw new Error('Réponse inattendue de Google (' + r.status + ' ' + titre + ')');
+      }
+    } catch (e) {
+      if (essai < 2 && LECTURES.has(fn)) { await pause(1200 * (essai + 1)); continue; }
+      if (fn !== 'signalerErreurs') signaler({ ou: 'réseau', fn, msg: String((e && e.message) || e) });
+      throw /Failed to fetch|NetworkError|Load failed/i.test(String(e && e.message)) ? new Error('Pas de connexion au Sheet (réseau)') : e;
+    }
+    // Sheet occupé par une autre action : rien n'a été fait, on réessaie tout seul
+    if (!j.ok && /^OCCUPE/.test(j.message || '') && essai < 3) { await pause(1500 * (essai + 1)); continue; }
+    break;
+  }
   if (!j.ok) {
     if (j.erreur === 'CLE' && fn !== 'verifierCle' && !cleRefusee) { cleRefusee = true; setTimeout(() => ecranCle('Le Sheet ne reconnaît pas cette clé. Vérifie-la (ou corrige-la) puis valide.'), 0); }
     throw new Error(j.message || 'Erreur du serveur');
   }
   return j.data;
 }
+/* Appels « de fond » (textes de Claude, fiches, chapitres) : un à la fois, après l'ouverture et jamais pendant une saisie,
+   pour ne pas embouteiller le Sheet (il traite une action à la fois). */
+let fileFond = Promise.resolve(), premierEtatRecu = false;
+async function attendreCalme() {
+  for (let i = 0; i < 40 && (!premierEtatRecu || (typeof envoisEnCours !== 'undefined' && envoisEnCours > 0)); i++) await pause(400);
+}
+function apiFond(fn, ...args) {
+  const p = fileFond.then(attendreCalme).then(() => api(fn, ...args));
+  fileFond = p.catch(() => {}).then(() => pause(250));
+  return p;
+}
+/* Erreurs vues sur ce téléphone : envoyées au Sheet (onglet « Erreurs de l'app ») pour être réparées */
+const erreursEnvoi = [], erreursVues = new Set();
+let erreursTimer = null;
+function signaler(o) {
+  if (!distant || !cleHeros) return;
+  const k = (o.ou || '') + '|' + (o.fn || '') + '|' + String(o.msg || '').slice(0, 120);
+  if (erreursVues.has(k) || erreursVues.size > 40) return;
+  erreursVues.add(k);
+  erreursEnvoi.push(Object.assign({ v: VERSION_APP, ctx: onglet }, o, { msg: String(o.msg || '').slice(0, 400) }));
+  clearTimeout(erreursTimer);
+  erreursTimer = setTimeout(() => { const l = erreursEnvoi.splice(0, 20); if (l.length) appelDistant('signalerErreurs', [l, null]).catch(() => {}); }, 3000);
+}
+window.addEventListener('error', e => { if (/ServiceWorker/.test(e.message || '')) return; signaler({ ou: 'js', msg: e.message, detail: String(e.filename || '').split('/').pop() + ':' + e.lineno + ':' + e.colno + ' ' + String((e.error && e.error.stack) || '').split('\n').slice(1, 3).join(' ') }); });
+window.addEventListener('unhandledrejection', e => { const r = e.reason; const m = String((r && r.message) || r); if (/ServiceWorker/.test(m)) return; signaler({ ou: 'promesse', msg: m, detail: String((r && r.stack) || '').split('\n').slice(1, 3).join(' ') }); });
 /* Héros joué sur ce téléphone (mémorisé). Chaque appel au serveur l'envoie en dernier paramètre. */
 let herosActif = '';
 try { herosActif = localStorage.getItem('heros') || ''; } catch (e) {}
 const ARITE = { getState: 0, logAction: 3, undoToday: 1, toggleVacances: 0, planifierVacances: 2, supprimerVacances: 1, basculerPause: 1,
   decalerSeance: 3, annulerDecalage: 3, reglerRappel: 1, testerRappel: 0, changerDifficulte: 1, reglerConfort: 1, reglerDevise: 1,
-  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 0, motDuCoach: 0, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, rebondissement: 0, chapitreEvolution: 1, retrospective: 0, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
+  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 1, motDuCoach: 0, signalerErreurs: 1, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, rebondissement: 0, chapitreEvolution: 1, retrospective: 0, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
 function api(fn, ...args) {
   if (fn in ARITE) {
     args = args.slice(0, ARITE[fn]);
@@ -1414,7 +1460,7 @@ function carteBoss(b, s) {
 }
 /** Onglet Combat : les deux boss, le journal des coups de la Compagnie, les règles */
 /* ---------- Carnet de quêtes : page à part (carnet.html), chargée au premier passage puis gardée en mémoire ---------- */
-const VERSION_CARNET = '2026-10-28-2'; // change à chaque livraison : force le téléphone à recharger carnet.html
+const VERSION_CARNET = '2026-10-29-3'; // change à chaque livraison : force le téléphone à recharger carnet.html
 function afficherCarnet(oui) {
   const box = document.getElementById('carnetBox');
   if (!box) return;
@@ -1422,7 +1468,7 @@ function afficherCarnet(oui) {
   const nav = document.querySelector('nav.tabs');
   box.style.bottom = (nav ? nav.offsetHeight : 72) + 'px';
   if (!box.querySelector('iframe')) {
-    box.innerHTML = '<div class="ld">Ouverture du carnet…</div><iframe title="Carnet de quêtes" src="carnet.html?v=${VERSION_CARNET}" allow="autoplay; microphone; screen-wake-lock"></iframe>';
+    box.innerHTML = `<div class="ld">Ouverture du carnet…</div><iframe title="Carnet de quêtes" src="carnet.html?v=${VERSION_CARNET}" allow="autoplay; microphone; screen-wake-lock"></iframe>`;
     box.querySelector('iframe').onload = () => { const l = box.querySelector('.ld'); if (l) l.remove(); };
   }
   box.hidden = false;
@@ -1431,6 +1477,7 @@ window.addEventListener('message', e => {
   const fr = document.querySelector('#carnetBox iframe');
   if (!fr || e.source !== fr.contentWindow) return; // seulement le Carnet de cette app
   const m = e.data || {};
+  if (m.t === 'compagnie-erreur') { signaler({ ou: 'carnet', msg: m.msg, detail: m.detail }); return; }
   if (m.t !== 'compagnie-etat' || !m.etat) return;
   const avant = state;
   if (envoisEnCours === 0) { state = m.etat; confirme = null; } else confirme = m.etat;
@@ -1501,16 +1548,16 @@ function demandesClaude(s) {
   const C = s.camp;
   if (onglet === 'compagnie' && C && !chroniqueDemandee && !(s.mj && s.mj.pret) && !C.recap.chronique && C.recap.heros.some(h => h.faits > 0)) {
     chroniqueDemandee = true;
-    api('chroniqueSemaine').then(t => { if (t) { textesClaude['chronique|' + C.recap.lundi] = t; if (onglet === 'compagnie') render(); } }).catch(() => {});
+    apiFond('chroniqueSemaine').then(t => { if (t) { textesClaude['chronique|' + C.recap.lundi] = t; if (onglet === 'compagnie') render(); } }).catch(() => {});
   }
   const b = s.boss && s.boss.semaine;
   if (onglet === 'combat' && b && b.statut !== 'À venir') {
     const k = b.debut + (b.statut === 'Vaincu' ? '|fin' : '');
-    if (paroleDemandee !== k) { paroleDemandee = k; api('paroleBoss').then(t => { if (t) { textesClaude['boss|' + k] = t; if (onglet === 'combat') render(); } }).catch(() => {}); }
+    if (paroleDemandee !== k) { paroleDemandee = k; apiFond('paroleBoss', b.statut === 'Vaincu').then(t => { if (t) { textesClaude['boss|' + k] = t; if (onglet === 'combat') render(); } }).catch(() => {}); }
   }
   const pr = s.bilan && s.bilan.precedente;
   if (onglet === 'heros' && pr && pr.total && coachDemande !== pr.lundi) {
-    coachDemande = pr.lundi; api('motDuCoach').then(t => { if (t) { textesClaude['coach|' + pr.lundi] = t; if (onglet === 'heros') render(); } }).catch(() => {});
+    coachDemande = pr.lundi; apiFond('motDuCoach').then(t => { if (t) { textesClaude['coach|' + pr.lundi] = t; if (onglet === 'heros') render(); } }).catch(() => {});
   }
 }
 document.addEventListener('click', e => {
@@ -1541,10 +1588,12 @@ function demanderLegende(p, afficher) {
   if (!(enLigne || distant) || !p || p.n <= 1 || legendesDemandees[p.n]) return;
   if (state && state.legende && state.legende[p.n]) { if (afficher) montrerLegende(state.legende[p.n]); return; }
   legendesDemandees[p.n] = true;
-  api('chapitreEvolution', { n: p.n, titre: p.titre, desc: p.desc }).then(c => {
+  apiFond('chapitreEvolution', { n: p.n, titre: p.titre, desc: p.desc }).then(c => {
     if (!c || !state) return;
     state.legende = Object.assign({}, state.legende, { [p.n]: c });
-    montrerLegende(c); if (onglet === 'heros') render();
+    // la fenêtre ne s'ouvre d'elle-même qu'au moment de l'évolution ; sinon, un simple signal
+    if (afficher && !document.querySelector('.sheet.on')) montrerLegende(c); else toast('📖 Ta légende a un nouveau chapitre (onglet Héros)');
+    if (onglet === 'heros') render();
   }).catch(() => {});
 }
 function montrerLegende(c) {
@@ -1609,20 +1658,20 @@ function demanderMJ(s) {
   const b = s.boss && s.boss.semaine;
   if (s.mj.pret && s.mj.rebondPossible && b && b.statut === 'En cours' && b.pvMax && b.pv / b.pvMax > 0.5 && rebondDemande !== s.mj.lundi) {
     rebondDemande = s.mj.lundi;
-    api('rebondissement').then(m => { if (m && m.rebond && state) { state.mj = m; render(); toast('⚡ Rebondissement dans le combat !'); } }).catch(() => {});
+    apiFond('rebondissement').then(m => { if (m && m.rebond && state) { state.mj = m; render(); toast('⚡ Rebondissement dans le combat !'); } }).catch(() => {});
   }
   if (s.retro && !s.retro.texte && !retroDemandee) {
     retroDemandee = true;
-    api('retrospective').then(r => { if (r && r.texte && state) { state.retro = r; render(); toast('🎆 La rétrospective de l\'année est arrivée'); } }).catch(() => {});
+    apiFond('retrospective').then(r => { if (r && r.texte && state) { state.retro = r; render(); toast('🎆 La rétrospective de l\'année est arrivée'); } }).catch(() => {});
   }
   if (state && state.niveau) { const CL = classeDe(state), p = CL.paliers[palierDe(state.niveau, CL)]; if (p && p.n > 1 && !(state.legende || {})[p.n]) demanderLegende(p, false); }
   if (s.mj.pret || mjDemande === s.mj.lundi) return;
   mjDemande = s.mj.lundi;
-  api('maitreDuJeu').then(m => {
+  apiFond('maitreDuJeu').then(m => {
     if (!m || !m.pret || !state) return;
     state.mj = m; render(); toast('📜 Un nouveau chapitre de la Saga vous attend');
     // la Quête du destin apparaît dans les annexes : on recharge l'état complet en arrière-plan
-    if (envoisEnCours === 0) api('getState').then(st => { if (envoisEnCours === 0) { state = st; render(); } }).catch(() => {});
+    if (envoisEnCours === 0) apiFond('getState').then(st => { if (envoisEnCours === 0) { state = st; render(); } }).catch(() => {});
   }).catch(() => {});
 }
 function vueSaga(s) {
@@ -1664,7 +1713,7 @@ function carteEvenement(s) {
   const nom = r.nom || e.nom, texte = r.texte || e.texte;
   if ((enLigne || distant) && !e.texte && recitDemande !== e.cle) {
     recitDemande = e.cle;
-    api('recitEvenement').then(x => { if (x && x.texte) { textesClaude['evt|' + e.cle] = x; render(); } }).catch(() => {});
+    apiFond('recitEvenement').then(x => { if (x && x.texte) { textesClaude['evt|' + e.cle] = x; render(); } }).catch(() => {});
   }
   return bloc + `<div class="evt ${E.actuel ? 'on' : ''}"><div class="evt-t">✨ ${E.actuel ? '' : 'Bientôt · '}${esc(nom)}</div>
     <div class="evt-e">${esc(e.effetTexte)} · ${E.actuel ? "jusqu'au " + dateCourte(e.fin) : 'dès le ' + dateCourte(e.debut)}</div>
@@ -2115,9 +2164,9 @@ function statsDe(s) {
 const fichesComp = {};
 try { Object.assign(fichesComp, JSON.parse(localStorage.getItem('fichesComp') || '{}')); } catch (e) {}
 const fichesEnCours = {};
-function chargerFiche(nom) {
+function chargerFiche(nom, fond) {
   if (fichesEnCours[nom]) return fichesEnCours[nom];
-  fichesEnCours[nom] = api('voirCompagnon', nom).then(c => {
+  fichesEnCours[nom] = (fond ? apiFond : api)('voirCompagnon', nom).then(c => {
     fichesComp[nom] = { data: c, t: Date.now() };
     try { localStorage.setItem('fichesComp', JSON.stringify(fichesComp)); } catch (e) {}
     return c;
@@ -2128,7 +2177,7 @@ function prechargerFiches(s) {
   if (!(enLigne || distant)) return;
   (s.compagnons || []).forEach(c => {
     const m = fichesComp[c.nom];
-    if (!m || Date.now() - m.t > 60000) chargerFiche(c.nom).catch(() => {});
+    if (!m || Date.now() - m.t > 60000) chargerFiche(c.nom, true).catch(() => {});
   });
 }
 /* Fiche d'un compagnon, en lecture seule : ses quêtes du jour, sa semaine, ses épiques */
@@ -2446,6 +2495,7 @@ function evolution(niveau) {
   vib([80, 50, 80, 50, 160]);
 }
 function toast(msg) {
+  if (/impossible|indisponible|ne répond pas|erreur|échec|n'a pas pu|pas de connexion|inattendu/i.test(String(msg))) signaler({ ou: 'toast', msg });
   const t = document.getElementById('toast');
   t.textContent = msg; t.style.display = 'block';
   setTimeout(() => (t.style.display = 'none'), 3500);
@@ -2948,13 +2998,14 @@ function lancer() {
   if (memo && (enLigne || distant)) { state = memo; render(); }
   else document.getElementById('app').innerHTML = '<div class="loading">Chargement de ta feuille de personnage…</div>';
   api('getState').then(s => {
-    state = s;
+    state = s; premierEtatRecu = true;
     if (s.heros && herosActif !== String(s.heros)) { herosActif = String(s.heros); try { localStorage.setItem('heros', herosActif); } catch (e) {} }
     render(); celebrer(s.nouveauxBonus);
     if (!s.d20 && !d20Vu) setTimeout(ouvrirD20, 350);
     setTimeout(() => prechargerFiches(state || s), 4000); // fiche du compagnon prête avant même d'ouvrir l'onglet
   }).catch(e => {
     // Dernière version déjà affichée : on la garde et on prévient, au lieu d'effacer l'écran
+    premierEtatRecu = true;
     if (memo && state) toast('Le Sheet ne répond pas (' + (e && e.message ? e.message : e) + ') : affichage de la dernière version connue.');
     else erreurChargement(e);
   });
