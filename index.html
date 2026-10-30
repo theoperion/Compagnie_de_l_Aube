@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Compagnie">
 <script>
   /* Adresse du moteur (Apps Script → Déployer → Gérer les déploiements → URL /exec) */
-  window.API_URL = 'https://script.google.com/macros/s/AKfycbxiUtkDCLmjrt8Z-4cHWWd3LXTPpxBc55TrHE9ZW5yxYZkxfgVI5CisuYnSrZsazFIg/exec';
+  window.API_URL = 'https://script.google.com/macros/s/AKfycbxrJdBY5fmNF8xPEkw_klKspUEvDTfvT8P1Kk6DMqKMmMUFCpZrauQXCMxK6CwTofiW/exec';
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 
@@ -1071,7 +1071,7 @@ let herosActif = '';
 try { herosActif = localStorage.getItem('heros') || ''; } catch (e) {}
 const ARITE = { getState: 0, logAction: 3, undoToday: 1, toggleVacances: 0, planifierVacances: 2, supprimerVacances: 1, basculerPause: 1,
   decalerSeance: 3, annulerDecalage: 3, reglerRappel: 1, testerRappel: 0, changerDifficulte: 1, reglerConfort: 1, reglerDevise: 1,
-  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 1, motDuCoach: 0, signalerErreurs: 1, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, rebondissement: 0, chapitreEvolution: 1, retrospective: 0, lancerD20: 0, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
+  getProfil: 0, sauvegarderMaintenant: 0, renommerQuete: 2, choisirTitre: 1, encourager: 1, proposerPacte: 1, accepterPacte: 0, chroniqueSemaine: 0, paroleBoss: 1, motDuCoach: 0, signalerErreurs: 1, recitEvenement: 0, maitreDuJeu: 0, voterMJ: 1, rebondissement: 0, chapitreEvolution: 1, retrospective: 0, lancerD20: 1, preparerSort: 1, utiliserRestauration: 1, voirCompagnon: 1 };
 function api(fn, ...args) {
   if (fn in ARITE) {
     args = args.slice(0, ARITE[fn]);
@@ -1806,12 +1806,10 @@ function carteD20(s) {
   const d = s.d20;
   return `<button class="d20-card fait ${d.mult < 1 ? 'malus' : ''}" data-d20="1">${d20Svg(d.de)}<div><b>${esc(d.titre)}</b><br>${d.mult !== 1 ? `XP ×${String(d.mult).replace('.', ',')} sur tes quêtes du jour` : 'Ni bonus ni malus aujourd\'hui'}</div></button>`;
 }
-let d20Vu = false, d20Promesse = null;
+let d20Vu = false, d20Promesse = null; // d20Promesse : gardé pour compatibilité
 function ouvrirD20() {
   d20Vu = true;
   const s = state, ov = document.getElementById('d20ov');
-  // Le jet part au serveur dès l'ouverture : quand on touche « Lancer », le résultat est déjà là
-  if (!s.d20 && !d20Promesse) d20Promesse = api('lancerD20').catch(e => { d20Promesse = null; throw e; });
   const carac = (s.classe && s.classe.fav1) || '';
   const deja = s.d20;
   ov.innerHTML = `<div class="d20-box">
@@ -1833,6 +1831,26 @@ function resultatD20Html(d) {
     ${d.mult !== 1 ? `<span class="mult ${d.mult < 1 ? 'malus' : ''}">XP ×${String(d.mult).replace('.', ',')} aujourd'hui</span>` : ''}`;
 }
 function fermerD20() { document.getElementById('d20ov').classList.remove('on'); }
+/* Le dé est tiré sur le téléphone : résultat en 1 seconde, sans attendre le Sheet (qui l'enregistre ensuite avec les mêmes règles) */
+function d20Local(s, d1, d2) {
+  const carac = (s.classe && s.classe.fav1) || '';
+  const st = (s.stats || []).find(x => x.nom === carac);
+  const mod = st ? Math.max(0, Math.floor((Number(st.score) - 10) / 2)) : 0;
+  const E = s.evenement && s.evenement.actuel, B = beneditionActive(s);
+  const avantage = !!((E && E.effet && E.effet.type === 'avantage') || (B && B.type === 'avantage'));
+  const de = avantage ? Math.max(d1, d2) : d1, total = de + mod;
+  const r = de === 20 ? { mult: 1.5, titre: 'COUP CRITIQUE !', texte: 'Les dieux sont avec toi : XP ×1,5 sur toutes tes quêtes du jour.' }
+    : de === 1 ? { mult: 0.8, titre: 'Échec critique…', texte: 'XP ×0,8 aujourd\'hui : le destin rit, à toi de lui prouver qu\'il a tort.' }
+    : total >= 18 ? { mult: 1.25, titre: 'Inspiration héroïque', texte: 'XP ×1,25 sur toutes tes quêtes du jour.' }
+    : total >= 10 ? { mult: 1.1, titre: 'Bon présage', texte: 'XP ×1,1 sur toutes tes quêtes du jour.' }
+    : { mult: 1, titre: 'Journée ordinaire', texte: 'Ni bonus ni malus : aujourd\'hui, c\'est toi qui fais la différence.' };
+  return Object.assign({ de, mod, carac, total, avantage: avantage ? [d1, d2] : null }, r);
+}
+function afficherD20(d) {
+  const zone = document.getElementById('d20zone'), res = document.getElementById('d20res');
+  if (zone) zone.innerHTML = d20Svg(d.de, d.de === 20 ? 'crit' : d.de === 1 ? 'fumble' : 'pose');
+  if (res) res.innerHTML = resultatD20Html(d);
+}
 async function lancerDe() {
   const btn = document.getElementById('d20go'), later = document.getElementById('d20later');
   if (state.d20) { fermerD20(); return; }
@@ -1842,8 +1860,7 @@ async function lancerDe() {
   zone.innerHTML = d20Svg('?', '');
   const de = zone.querySelector('svg');
   const txt = () => de.querySelector('text');
-  let pas = 55;
-  const tic = setInterval(() => { const t = txt(); if (t) t.textContent = 1 + Math.floor(Math.random() * 20); }, pas);
+  const tic = setInterval(() => { const t = txt(); if (t) t.textContent = 1 + Math.floor(Math.random() * 20); }, 55);
   const anim = confort().animations && de.animate ? de.animate([
     { transform: 'translate(-110px,-70px) rotate(-320deg) scale(.85)', easing: 'cubic-bezier(.5,0,1,1)' },
     { transform: 'translate(-55px,0) rotate(-150deg) scale(.95)', offset: .32, easing: 'cubic-bezier(0,0,.5,1)' },
@@ -1852,24 +1869,32 @@ async function lancerDe() {
     { transform: 'translate(-5px,-8px) rotate(-6deg)', offset: .76, easing: 'cubic-bezier(.5,0,1,1)' },
     { transform: 'translate(0,0) rotate(3deg)', offset: .88 },
     { transform: 'translate(0,0) rotate(0)' }
-  ], { duration: 950 }) : null;
-  if (anim) [.32, .64, .88].forEach((o, k) => setTimeout(() => vib(k === 2 ? 15 : 30), o * 950)); // les « toc » sur la table
-  const attente = anim ? anim.finished : new Promise(r => setTimeout(r, 200));
-  try {
-    const [res] = await Promise.all([d20Promesse || api('lancerD20'), attente]);
-    d20Promesse = null;
-    clearInterval(tic);
-    state = res; confirme = null;
-    const d = res.d20;
-    zone.innerHTML = d20Svg(d.de, d.de === 20 ? 'crit' : d.de === 1 ? 'fumble' : 'pose');
-    document.getElementById('d20res').innerHTML = resultatD20Html(d);
-    vib(d.de === 20 ? [80, 50, 80, 50, 200] : d.de === 1 ? [200] : [40]);
-    btn.disabled = false; btn.textContent = 'À l\'aventure !';
+  ], { duration: 1100 }) : null;
+  if (anim) [.32, .64, .88].forEach((o, k) => setTimeout(() => vib(k === 2 ? 15 : 30), o * 1100)); // les « toc » sur la table
+  const d1 = 1 + Math.floor(Math.random() * 20), d2 = 1 + Math.floor(Math.random() * 20);
+  const local = d20Local(state, d1, d2);
+  // le Sheet enregistre le jet pendant que le dé roule
+  const envoi = api('lancerD20', { d1, d2 });
+  await (anim ? anim.finished : pause(200));
+  clearInterval(tic);
+  state.d20 = local;
+  afficherD20(local);
+  vib(local.de === 20 ? [80, 50, 80, 50, 200] : local.de === 1 ? [200] : [40]);
+  btn.disabled = false; btn.textContent = 'À l\'aventure !';
+  render();
+  envoi.then(res => {
+    const d = res && res.d20;
+    if (envoisEnCours === 0) { state = res; confirme = null; } else confirme = res;
+    if (d && (d.de !== local.de || d.texte !== local.texte)) {
+      if (document.getElementById('d20ov').classList.contains('on')) afficherD20(d);
+      if (d.de !== local.de) toast('Ton dé du jour avait déjà été lancé sur un autre appareil : ' + d.de);
+    }
     render();
-  } catch (e) {
-    clearInterval(tic); btn.disabled = false; btn.textContent = 'Lancer le dé';
-    toast('Le dé s\'est perdu : ' + (e && e.message ? e.message : e));
-  }
+  }).catch(e => {
+    state.d20 = null; render();
+    if (document.getElementById('d20ov').classList.contains('on')) { btn.textContent = 'Lancer le dé'; zone.innerHTML = d20Svg('?', ''); document.getElementById('d20res').innerHTML = ''; }
+    toast('Le dé s\'est perdu (pas de réponse du Sheet) : relance-le dans un instant');
+  });
 }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-d20]')) { ouvrirD20(); return; }
